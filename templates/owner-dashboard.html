@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Owner Administrator Dashboard</title>
+    <style>
+        body{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 40px;
+        }
+        .dashboard-container{
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            padding: 32px;
+        }
+        .dashboard-header{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #f1f3f5;
+            padding-bottom: 20px; 
+            margin-bottom: 24px;
+        }
+        h1{
+            color: black;
+            margin: 0;
+            font-size: 24px;
+        }
+        .date-picker-area{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .date-picker-area input{
+            padding: 8px 12px;
+            border: 1px solid #ced4da; 
+            border-radius: 6px; 
+            font-size: 14px; 
+            outline: none; 
+        }
+        .schedule-grid { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 16px; 
+        }
+        .slot-row { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            padding: 16px;
+            border: 1px solid #e9ecef; 
+            border-radius: 8px; 
+            transition: background-color 0.2s; 
+        }
+        .slot-row.booked { 
+            border-left: 4px solid #dc3545; 
+            background-color: #fff5f5; 
+        }
+        .slot-row.open { 
+            border-left: 4px solid #28a745; 
+            background-color: #f4fbf7; 
+        }
+        .time-badge { 
+            font-weight: bold; 
+            font-size: 16px; 
+            color: #495057; 
+            width: 80px; 
+        }
+        .status-details { 
+            flex: 1; 
+            margin-left: 20px; 
+            font-size: 15px; 
+            color: #6c757d; 
+        }
+        .booked .status-details { 
+            color: #212529; 
+            font-weight: 500; 
+        }
+        .cancel-btn { 
+            background-color: #dc3545; 
+            color: white; 
+            border: none; 
+            padding: 6px 12px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 13px; 
+            font-weight: bold; 
+        }
+        .cancel-btn:hover { 
+            background-color: #c82333; 
+        }
+    </style>
+</head>
+<body>
+    <div class = "dashboard-container">
+        <div class = "dashboard-header">
+            <h1>Business Bookings</h1>
+            <div class = "date-picker-area">
+                <label for = "scheduleDate" style="font-weight: 500; color: red"> Select Date:</label>
+                <input type = "date" id= "scheduleDate">
+            </div>
+        </div>
+        <div class="schedule-grid" id="scheduleGrid">
+            <div style = "text-align: center; color: orange; padding: 20px;">Pick a date above to view bookings.</div>
+        </div>
+    </div>
+
+    <script>
+        const scheduleDate = document.getElementById("scheduleDate");
+        const scheduleGrid = document.getElementById("scheduleGrid");
+        const SHIFT_HOURS = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00"];
+        // Helper function -- builds an open grid timeline
+        function drawEmptyTimeline() {
+            scheduleGrid.innerHTML = ""; // Clear current views
+            SHIFT_HOURS.forEach(function(hour) {
+                const row = document.createElement("div");
+                row.classList.add("slot-row", "open");
+
+                const timeBadge = document.createElement("div");
+                timeBadge.classList.add("time-badge");
+                timeBadge.textContent = hour;
+                row.appendChild(timeBadge);
+
+                const detailsArea = document.createElement("div");
+                detailsArea.classList.add("status-details");
+                detailsArea.textContent = "Open — Available for Booking";
+                row.appendChild(detailsArea);
+
+                scheduleGrid.appendChild(row);
+            });
+        }
+
+        // Watches for owner to pick or change a date
+        scheduleDate.addEventListener("change", async function() {
+            const selectedDate = scheduleDate.value; // Extracts string format: "YYYY-MM-DD"
+            if (!selectedDate) 
+                return;
+
+            // Clear the current placeholder text and show a loading state
+            scheduleGrid.innerHTML = '<div style="text-align: center; color: #6c757d; padding: 20px;">Fetching schedule data streams...</div>';
+
+            try {
+                const response = await fetch(`/owner/dashboard?date=${selectedDate}`);
+                if (!response.ok) {
+                    // If backend throws a 400 there are no bookings 
+                    // Call the timeline helper 
+                    drawEmptyTimeline();
+                    return;
+                }
+                const data = await response.json();
+                const bookings = data.schedule;
+
+                // Wipes out loading placeholder message to display the live rows
+                scheduleGrid.innerHTML = "";
+
+                // Loop through the daily hrs master timeline 
+                SHIFT_HOURS.forEach(function(hour) {
+                    const row = document.createElement("div");
+                    row.classList.add("slot-row");
+
+                    const timeBadge = document.createElement("div");
+                    timeBadge.classList.add("time-badge");
+                    timeBadge.textContent = hour;
+                    row.appendChild(timeBadge);
+
+                    const detailsArea = document.createElement("div");
+                    detailsArea.classList.add("status-details");
+                    const match = bookings.find(function(apptTuple) {
+                        const appointmentTimeString = apptTuple[3]; // Index 3 holds timestamp string text
+                        return appointmentTimeString && appointmentTimeString.endsWith(hour);
+                    });
+
+                    // Restores the conditional layout grid logic block
+                    if (match) {
+                        row.classList.add("booked");
+                        const appointmentId = match[0]; // Index 0 = ID number integer
+                        const clientName = match[1];    // Index 1 = Name text string
+                        const clientPhone = match[2];   // Index 2 = Phone text string
+                        detailsArea.textContent = `Client: ${clientName} | 📞 Phone: ${clientPhone}`;
+                        row.appendChild(detailsArea);
+
+                        // Cancel Button for owner 
+                        const cancelBtn = document.createElement("button");
+                        cancelBtn.classList.add("cancel-btn");
+                        cancelBtn.textContent = "Cancel Booking";
+                        cancelBtn.onclick = async function() {
+                            if (confirm(`Are you sure you want to delete ${clientName}'s booking at ${hour}?`)) {
+                                const cancelRes = await fetch("/cancel-appointment", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ client_id: appointmentId })
+                                });
+                                if (cancelRes.ok) {
+                                    // Force calendar dropdown to refire its change logic loop to update display grids
+                                    scheduleDate.dispatchEvent(new Event('change'));
+                                }
+                            }
+                        };
+                        row.appendChild(cancelBtn);
+                    } else {
+                        row.classList.add("open");
+                        detailsArea.textContent = "Open — Available for Booking";
+                        row.appendChild(detailsArea);
+                    }
+
+                    // Push structural row block onto the live grid layout
+                    scheduleGrid.appendChild(row);
+                });
+            } catch (error) {
+                console.error("Dashboard connection sync failed:", error);
+                scheduleGrid.innerHTML = '<div style="text-align: center; color: #dc3545; padding: 20px;">Error loading schedule. Please check server connections.</div>';
+            }
+        });
+    </script>
+</body>
+</html>
