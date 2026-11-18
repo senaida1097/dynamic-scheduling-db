@@ -15,7 +15,7 @@ An asynchronous, full-stack appointment scheduling system built with **FastAPI**
 
 ## Tech Stack
 * **Backend:** Python, FastAPI, Uvicorn (ASGI), Pydantic
-* **Databse:** SQLite3
+* **Database:** SQLite3
 * **Frontend:** HTML5, CSS3,Vanilla Javascript, Jinja2 Templates
 
 
